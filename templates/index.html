@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coffee Roaster Control</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.3.2/socket.io.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+        h1 { color: #6b3e26; }
+        button, input, select { padding: 10px; margin: 10px; font-size: 18px; cursor: pointer; }
+        .status { font-size: 24px; font-weight: bold; }
+        #graphContainer { display: none; margin-top: 20px; }
+        canvas { max-width: 600px; margin: auto; }
+    </style>
+</head>
+<body>
+    <h1>☕ Coffee Roaster Control</h1>
+
+    <h2>🌡️ Current Temp: <span id="temperature">Loading...</span>°F</h2>
+    <h3>🔥 Heater: <span id="heaterStatus">OFF</span></h3>
+
+    <h2>Manual Roasting Controls</h2>
+    <button id="enableManual">Enable Manual Mode</button>
+    <br><br>
+
+    <label>Set Target Temp (°F):</label>
+    <input type="number" id="manualTemp" value="400">
+    <button id="setTemp">Set Temperature</button>
+    <br><br>
+
+    <button id="stopManual">Stop Roasting</button>
+
+    <h2>Save Roast Session as Profile</h2>
+    <input type="text" id="profileName" placeholder="Enter profile name">
+    <button id="saveProfile">Save Profile</button>
+
+    <h2>Load & Run Profile</h2>
+    <select id="profileList">
+        <option disabled selected>Loading profiles...</option>
+    </select>
+    <button id="loadProfile">Load Profile</button>
+
+    <h2>📊 Temperature Graph</h2>
+    <button id="toggleGraph">Show/Hide Graph</button>
+    <div id="graphContainer">
+        <canvas id="tempChart"></canvas>
+    </div>
+
+    <script>
+        var socket = io();
+        var roastingActive = false;
+        var tempChart = new Chart(document.getElementById("tempChart"), {
+            type: "line",
+            data: {
+                labels: [],
+                datasets: [{
+                    label: "Temperature (°F)",
+                    data: [],
+                    borderColor: "blue",
+                    backgroundColor: "rgba(0, 0, 255, 0.2)",
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { title: { display: true, text: "Time (seconds)" } },
+                    y: { title: { display: true, text: "Temperature (°F)" } }
+                }
+            }
+        });
+
+        function updateGraph(time, temperature) {
+            tempChart.data.labels.push(time);
+            tempChart.data.datasets[0].data.push(temperature);
+            tempChart.update();
+        }
+
+        function resetGraph() {
+            tempChart.data.labels = [];
+            tempChart.data.datasets[0].data = [];
+            tempChart.update();
+        }
+
+        socket.on('temperature_update', function(data) {
+            $("#temperature").text(data.temperature);
+            if (roastingActive) {
+                let elapsedTime = (Date.now() - startTime) / 1000;
+                updateGraph(elapsedTime, data.temperature);
+            }
+        });
+
+        socket.on('heater_update', function(data) {
+            $("#heaterStatus").text(data.heater_on ? "ON" : "OFF");
+        });
+
+        $("#enableManual").click(() => {
+            resetGraph();
+            roastingActive = true;
+            startTime = Date.now();
+            $("#graphContainer").show();
+            $.post('/set_manual', function(response) {
+                alert(response.status);
+            });
+        });
+
+        $("#setTemp").click(() => {
+            let temp = $("#manualTemp").val();
+            $.post('/set_temperature', { temperature: temp }, function(response) {
+                alert(response.status);
+            }).fail(function(error) {
+                alert("Error setting temperature: " + error.responseText);
+            });
+        });
+
+        $("#stopManual").click(() => {
+            roastingActive = false;
+            $("#graphContainer").hide();
+            $.post('/stop_manual', function(response) {
+                alert(response.status);
+            });
+        });
+
+        function loadProfiles() {
+            $.get('/get_profiles', function(response) {
+                let profileList = $("#profileList");
+                profileList.empty();
+
+                if (response.profiles.length === 0) {
+                    profileList.append(`<option disabled>No profiles found</option>`);
+                } else {
+                    response.profiles.forEach(function(profile) {
+                        profileList.append(`<option value="${profile}">${profile}</option>`);
+                    });
+                }
+            }).fail(function() {
+                alert("Error loading profiles.");
+            });
+        }
+
+        $("#saveProfile").click(function() {
+            let profileName = $("#profileName").val().trim();
+            if (!profileName) {
+                alert("Please enter a profile name.");
+                return;
+            }
+
+            $.post("/save_profile", { profile_name: profileName }, function(response) {
+                alert(response.status);
+                loadProfiles();
+            }).fail(function(error) {
+                alert("Error saving profile: " + error.responseText);
+            });
+        });
+
+        $("#loadProfile").click(function() {
+            let profileName = $("#profileList").val();
+            if (!profileName) {
+                alert("Please select a profile.");
+                return;
+            }
+
+            resetGraph();
+            roastingActive = true;
+            startTime = Date.now();
+            $("#graphContainer").show();
+
+            $.post("/load_profile", { profile_name: profileName }, function(response) {
+                alert(response.status);
+            }).fail(function(error) {
+                alert("Error loading profile: " + error.responseText);
+            });
+        });
+
+        $("#toggleGraph").click(() => {
+            $("#graphContainer").toggle();
+        });
+
+        $(document).ready(function() {
+            loadProfiles();
+        });
+    </script>
+</body>
+</html>

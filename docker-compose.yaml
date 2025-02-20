@@ -1,0 +1,17 @@
+services:
+  coffee-roaster:
+    container_name: coffee-roaster
+    build:
+      context: .  # Only build if the image is not present
+      dockerfile: Dockerfile
+    image: coffee-roaster:latest  # Use a specific image tag
+    restart: unless-stopped
+    privileged: true
+    ports:
+      - "5000:5000"
+    volumes:
+      - /dev/spidev0.0:/dev/spidev0.0
+      - /dev/gpiomem:/dev/gpiomem
+    environment:
+      - FLASK_APP=coffee_roaster_web.py
+      - FLASK_ENV=production
