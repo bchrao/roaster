@@ -28,6 +28,6 @@ The - of the relay goes to the N side of the NPN transistor.
 Pin 11 goes to the P side of the NPN transistor.
 The other N side goes to GND (I used Pin 9) with the resistor inline.
 
-Diagram:
+#### Diagram:
 
 ![ELF Wiring](images/Roaster%20Schematic.png)
