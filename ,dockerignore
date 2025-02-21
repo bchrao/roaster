@@ -1,0 +1,11 @@
+# Repo files
+README.md
+LICENSE
+images/
+.git/
+.gitignore
+
+# Docker stuff
+Dockerfile
+docker-compose.yaml
+docker-compose.override.yaml
