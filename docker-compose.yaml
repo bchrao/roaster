@@ -12,6 +12,7 @@ services:
     volumes:
       - /dev/spidev0.0:/dev/spidev0.0
       - /dev/gpiomem:/dev/gpiomem
+      - ./data:/app/data  # Persist profiles between builds
     environment:
       - FLASK_APP=coffee_roaster_web.py
       - FLASK_ENV=production

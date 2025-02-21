@@ -1,13 +1,21 @@
-from flask import Flask, render_template, request, jsonify
-from flask_socketio import SocketIO
+import os
+import json
 import time
 import threading
 import board
 import digitalio
 import RPi.GPIO as GPIO
 import adafruit_max31855
-import json
-import os  # <-- Added to check if JSON file exists
+from flask import Flask, render_template, request, jsonify
+from flask_socketio import SocketIO
+
+# Define persistent storage path
+PROFILES_DIR = "/app/data"
+PROFILES_FILE = os.path.join(PROFILES_DIR, "profiles.json")
+
+# Ensure directory exists
+if not os.path.exists(PROFILES_DIR):
+    os.makedirs(PROFILES_DIR)
 
 # GPIO Configuration
 RELAY_PIN = 17
@@ -35,7 +43,6 @@ heater_on = False
 target_temp = None
 current_temp = 0
 roast_log = []
-profiles_file = "profiles.json"
 
 def c_to_f(celsius):
     """Convert Celsius to Fahrenheit."""
@@ -122,29 +129,27 @@ def run_profile(profile):
     socketio.emit('profile_complete', {'status': 'Profile Completed'})
 
 def save_profile(name):
-    """Save the current roast session as a profile and refresh the profile list."""
+    """Save the current roast session as a profile."""
     profiles = load_profiles()
     
-    # Ensure profile contains roasting steps
     if not roast_log:
         return {"status": "Error: No roasting data to save."}, 400
 
     profiles[name] = {"name": name, "steps": roast_log}
     save_profiles(profiles)
-    
-    print(f"✅ Profile '{name}' saved successfully!")  # Debugging output
-    return {"status": f"Profile '{name}' saved successfully!"}
 
+    print(f"✅ Profile '{name}' saved successfully!")  
+    return {"status": f"Profile '{name}' saved successfully!"}
 
 def load_profiles():
     """Load roasting profiles from JSON file."""
-    if not os.path.exists(profiles_file):  # If file doesn't exist, create an empty one
-        save_profiles({})
+    if not os.path.exists(PROFILES_FILE):
+        save_profiles({})  
 
     try:
-        with open(profiles_file, "r") as file:
+        with open(PROFILES_FILE, "r") as file:
             profiles = json.load(file)
-            print(f"📁 Loaded profiles: {profiles}")  # Debugging output
+            print(f"📁 Loaded profiles: {profiles}")  
             return profiles
     except json.JSONDecodeError:
         print("⚠️ Error: Corrupt JSON file! Resetting.")
@@ -153,7 +158,7 @@ def load_profiles():
 
 def save_profiles(profiles):
     """Save roasting profiles to JSON file."""
-    with open(profiles_file, "w") as file:
+    with open(PROFILES_FILE, "w") as file:
         json.dump(profiles, file, indent=4)
 
 @app.route('/')
@@ -178,12 +183,11 @@ def stop_roasting():
     """Stop both manual and profile roasting."""
     global manual_mode, target_temp
     manual_mode = False
-    target_temp = None  # Reset target temperature
-    control_heater(False)  # Turn off the heater
+    target_temp = None  
+    control_heater(False)  
 
-    print("🛑 Roasting stopped manually!")  # Debugging output
+    print("🛑 Roasting stopped manually!")  
     return jsonify({'status': 'Roasting stopped'})
-
 
 @app.route('/save_profile', methods=['POST'])
 def save_profile_api():
@@ -203,15 +207,14 @@ def get_profiles():
     if not profiles:
         return jsonify({'status': 'No profiles found', 'profiles': []})
 
-    print(f"📁 Sending profile list: {list(profiles.keys())}")  # Debugging output
+    print(f"📁 Sending profile list: {list(profiles.keys())}")  
     return jsonify({'status': 'Profiles loaded', 'profiles': list(profiles.keys())})
-
 
 @app.route('/load_profile', methods=['POST'])
 def load_profile():
     """Load a saved roasting profile and execute it."""
     profiles = load_profiles()
-    profile_name = request.form.get('profile_name')  # Get profile name from the request
+    profile_name = request.form.get('profile_name')  
 
     if not profile_name:
         return jsonify({'status': 'Error: Profile name is required'}), 400
@@ -220,9 +223,8 @@ def load_profile():
         return jsonify({'status': 'Error: Profile not found'}), 404
 
     profile = profiles[profile_name]
-    print(f"🔍 Loading profile: {profile_name}")  # Debugging output
+    print(f"🔍 Loading profile: {profile_name}")  
 
-    # Run the profile in a separate thread
     threading.Thread(target=run_profile, args=(profile,)).start()
     return jsonify({'status': f'Running profile {profile_name}'})
 
